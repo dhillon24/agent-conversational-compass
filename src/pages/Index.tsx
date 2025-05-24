@@ -143,7 +143,7 @@ const Index = () => {
               <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
                 <Bot className="w-8 h-8 text-blue-600" />
                 Customer Service AI
-              </div>
+              </h1>
               <p className="text-gray-600 mt-1">AI-powered customer support with payment processing</p>
             </div>
             <div className="flex items-center gap-2">
