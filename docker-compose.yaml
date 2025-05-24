@@ -1,0 +1,94 @@
+
+version: '3.8'
+
+services:
+  # Qdrant Vector Database
+  qdrant:
+    image: qdrant/qdrant:v1.7.4
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    environment:
+      - QDRANT__SERVICE__HTTP_PORT=6333
+      - QDRANT__SERVICE__GRPC_PORT=6334
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Backend FastAPI Service
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - QDRANT_URL=http://qdrant:6333
+      - STRIPE_API_KEY=${STRIPE_API_KEY}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
+      - CLIP_MODEL=${CLIP_MODEL:-openai/clip-vit-base-patch32}
+      - ENVIRONMENT=development
+    volumes:
+      - ./backend:/app
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+  # MCP Server
+  mcp_server:
+    build:
+      context: ./mcp_server
+      dockerfile: Dockerfile
+    ports:
+      - "8001:8001"
+    environment:
+      - BACKEND_URL=http://backend:8000
+      - WORKER_URL=http://worker:8002
+    volumes:
+      - ./mcp_server:/app
+    depends_on:
+      - backend
+    command: uvicorn dispatcher:app --host 0.0.0.0 --port 8001 --reload
+
+  # Worker Service
+  worker:
+    build:
+      context: ./worker
+      dockerfile: Dockerfile
+    ports:
+      - "8002:8002"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - QDRANT_URL=http://qdrant:6333
+      - STRIPE_API_KEY=${STRIPE_API_KEY}
+    volumes:
+      - ./worker:/app
+    depends_on:
+      - qdrant
+    command: python worker.py
+
+  # Frontend React Dashboard
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://localhost:8000
+      - VITE_COPILOT_CLOUD_API_KEY=${VITE_COPILOT_CLOUD_API_KEY}
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+    command: npm run dev -- --host 0.0.0.0
+
+volumes:
+  qdrant_data:
