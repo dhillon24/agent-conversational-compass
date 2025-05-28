@@ -1,19 +1,25 @@
-
 import os
 import logging
 from contextlib import asynccontextmanager
 from typing import Dict, Any
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 import stripe
+from dotenv import load_dotenv
 
 from graph.build_graph import build_customer_service_graph
 from services.qdrant_client import QdrantService
 from services.stripe_client import StripeService
 from services.embeddings import EmbeddingService
+from services.mcp_client import mcp_client
+
+# Load environment variables from .env file in project root
+env_path = Path(__file__).parent.parent / ".env"
+load_dotenv(dotenv_path=env_path)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -42,8 +48,14 @@ async def lifespan(app: FastAPI):
     # Initialize embedding service
     await embedding_service.initialize()
     
+    # Initialize MCP client
+    await mcp_client.initialize()
+    
     logger.info("All services initialized successfully")
     yield
+    
+    # Cleanup
+    await mcp_client.close()
     logger.info("Shutting down services...")
 
 
@@ -57,7 +69,7 @@ app = FastAPI(
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://frontend:5173"],
+    allow_origins=["http://localhost:5173", "http://localhost:8080", "http://frontend:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -105,11 +117,15 @@ async def health_check():
         # Check OpenAI availability
         embedding_status = await embedding_service.health_check()
         
+        # Check MCP server connection
+        mcp_status = await mcp_client.health_check()
+        
         return {
             "status": "healthy",
             "services": {
                 "qdrant": qdrant_status,
                 "embeddings": embedding_status,
+                "mcp_server": mcp_status,
                 "stripe": "connected" if stripe.api_key else "not_configured"
             }
         }
@@ -135,16 +151,24 @@ async def chat_endpoint(request: ChatRequest, background_tasks: BackgroundTasks)
             "is_final": False,
         }
         
+        # Configuration for the checkpointer
+        config = {
+            "configurable": {
+                "thread_id": request.session_id or f"thread_{request.user}",
+            }
+        }
+        
         # Run the LangGraph workflow
-        final_state = await customer_service_graph.ainvoke(initial_state)
+        final_state = await customer_service_graph.ainvoke(initial_state, config=config)
         
         # Store conversation in background
         background_tasks.add_task(
             qdrant_service.store_conversation,
-            request.user,
-            request.message,
-            final_state.get("response", ""),
-            final_state.get("sentiment", {}),
+            user_id=request.user,
+            message=request.message,
+            response=final_state.get("response", ""),
+            sentiment=final_state.get("sentiment", {}),
+            session_id=final_state.get("session_id", request.session_id),
         )
         
         return ChatResponse(

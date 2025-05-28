@@ -1,6 +1,6 @@
-
 import React, { useState, useRef } from 'react';
-import { useCopilotAction } from '@copilotkit/react-core';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 const ChatInterface: React.FC = () => {
   const [messages, setMessages] = useState<any[]>([]);
@@ -8,29 +8,6 @@ const ChatInterface: React.FC = () => {
   const [userId, setUserId] = useState('customer123');
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  // Copilot action for improving responses
-  useCopilotAction({
-    name: "improveResponse",
-    description: "Improve the AI response for better customer service",
-    parameters: [
-      {
-        name: "originalResponse",
-        type: "string",
-        description: "The original AI response to improve",
-      },
-      {
-        name: "improvementType",
-        type: "string",
-        description: "Type of improvement needed",
-        enum: ["empathy", "clarity", "technical", "brevity"],
-      },
-    ],
-    handler: async ({ originalResponse, improvementType }) => {
-      // This would typically call an AI service to improve the response
-      return `Improved response (${improvementType}): ${originalResponse}`;
-    },
-  });
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -55,7 +32,7 @@ const ChatInterface: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const response = await fetch('/api/chat', {
+      const response = await fetch(`${API_URL}/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -67,7 +44,7 @@ const ChatInterface: React.FC = () => {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to get response');
+        throw new Error(`Failed to get response: ${response.status} ${response.statusText}`);
       }
 
       const data = await response.json();
@@ -88,7 +65,7 @@ const ChatInterface: React.FC = () => {
       const errorMessage = {
         id: Date.now() + 1,
         user: 'System',
-        message: 'Sorry, I encountered an error. Please try again.',
+        message: `Error: Failed to send message, please try again. (${error instanceof Error ? error.message : 'Unknown error'})`,
         timestamp: new Date().toISOString(),
         type: 'error',
       };

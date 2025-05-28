@@ -1,4 +1,3 @@
-
 #!/bin/bash
 
 # Qdrant Collection Initialization Script
@@ -13,12 +12,20 @@ echo "Qdrant URL: $QDRANT_URL"
 
 # Wait for Qdrant to be ready
 echo "Waiting for Qdrant to be ready..."
-until curl -f "$QDRANT_URL/health" > /dev/null 2>&1; do
+until curl -f "$QDRANT_URL/" > /dev/null 2>&1; do
     echo "Waiting for Qdrant..."
     sleep 2
 done
 
 echo "Qdrant is ready!"
+
+# Check if collection already exists
+echo "Checking if collection exists..."
+if curl -s "$QDRANT_URL/collections/$COLLECTION_NAME" | grep -q "\"status\":\"green\""; then
+    echo "Collection '$COLLECTION_NAME' already exists and is healthy!"
+    echo "Qdrant initialization complete!"
+    exit 0
+fi
 
 # Create the customer conversations collection
 echo "Creating collection: $COLLECTION_NAME"

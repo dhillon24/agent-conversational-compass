@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { useCopilotAction } from '@copilotkit/react-core';
+import { apiRequest, apiConfig } from '../config/api';
 
 interface DashboardProps {
   systemHealth: any;
@@ -13,25 +12,6 @@ const Dashboard: React.FC<DashboardProps> = ({ systemHealth }) => {
   const [stripeEvents, setStripeEvents] = useState([]);
   const [debugInfo, setDebugInfo] = useState<any>(null);
 
-  // Copilot action for AI assistance
-  useCopilotAction({
-    name: "analyzeDashboard",
-    description: "Analyze dashboard data and provide insights",
-    parameters: [
-      {
-        name: "analysisType",
-        type: "string",
-        description: "Type of analysis to perform",
-        enum: ["sentiment", "conversations", "payments", "overall"],
-      },
-    ],
-    handler: async ({ analysisType }) => {
-      const analysis = await performDashboardAnalysis(analysisType);
-      setDebugInfo(analysis);
-      return `Analysis complete for ${analysisType}`;
-    },
-  });
-
   useEffect(() => {
     fetchDashboardData();
     const interval = setInterval(fetchDashboardData, 10000); // Refresh every 10 seconds
@@ -41,17 +21,19 @@ const Dashboard: React.FC<DashboardProps> = ({ systemHealth }) => {
   const fetchDashboardData = async () => {
     try {
       // Fetch sentiment analytics
-      const sentimentResponse = await fetch('/api/analytics/sentiment');
-      if (sentimentResponse.ok) {
-        const sentimentData = await sentimentResponse.json();
+      try {
+        const sentimentData = await apiRequest(apiConfig.endpoints.analytics.sentiment);
         setSentimentData(generateSentimentChart(sentimentData));
+      } catch (error) {
+        console.error('Error fetching sentiment data:', error);
       }
 
       // Fetch recent Stripe events
-      const stripeResponse = await fetch('/api/stripe/events?limit=10');
-      if (stripeResponse.ok) {
-        const eventsData = await stripeResponse.json();
+      try {
+        const eventsData = await apiRequest(`${apiConfig.endpoints.stripe.events}?limit=10`);
         setStripeEvents(eventsData.events || []);
+      } catch (error) {
+        console.error('Error fetching Stripe events:', error);
       }
 
       // Mock conversation data for now

@@ -1,6 +1,6 @@
-
 import React, { useState } from 'react';
 import { Search } from 'lucide-react';
+import { apiRequest, apiConfig } from '../config/api';
 
 const SearchInterface: React.FC = () => {
   const [query, setQuery] = useState('');
@@ -13,11 +13,8 @@ const SearchInterface: React.FC = () => {
 
     setIsLoading(true);
     try {
-      const response = await fetch('/api/search', {
+      const data = await apiRequest(apiConfig.endpoints.search, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           query,
           limit: 10,
@@ -25,11 +22,6 @@ const SearchInterface: React.FC = () => {
         }),
       });
 
-      if (!response.ok) {
-        throw new Error('Search failed');
-      }
-
-      const data = await response.json();
       setResults(data.results || []);
     } catch (error) {
       console.error('Search error:', error);

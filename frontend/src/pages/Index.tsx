@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -6,6 +5,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { MessageCircle, Send, Bot, User, Activity } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { apiRequest, apiConfig } from '../config/api';
 
 interface Message {
   id: string;
@@ -42,8 +42,7 @@ const Index = () => {
 
   const checkSystemHealth = async () => {
     try {
-      const response = await fetch('/api/health');
-      const health = await response.json();
+      const health = await apiRequest(apiConfig.endpoints.health);
       setSystemHealth(health);
     } catch (error) {
       console.error('Health check failed:', error);
@@ -66,22 +65,13 @@ const Index = () => {
     setCurrentMessage('');
 
     try {
-      const response = await fetch('/api/chat', {
+      const data = await apiRequest(apiConfig.endpoints.chat, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           user: userId,
           message: currentMessage,
         }),
       });
-
-      if (!response.ok) {
-        throw new Error('Failed to get response');
-      }
-
-      const data = await response.json();
 
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),

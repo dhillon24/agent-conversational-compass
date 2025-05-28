@@ -1,4 +1,3 @@
-
 import logging
 import os
 import uuid
@@ -83,6 +82,7 @@ class QdrantService:
         response: str = "",
         sentiment: Dict[str, float] = None,
         embedding: List[float] = None,
+        session_id: str = None,
     ):
         """Store a conversation in Qdrant."""
         await self.initialize()
@@ -93,6 +93,7 @@ class QdrantService:
             
             payload = {
                 "user_id": user_id,
+                "session_id": session_id or f"session_{user_id}",
                 "message": message,
                 "response": response,
                 "sentiment": sentiment or {},
@@ -115,7 +116,7 @@ class QdrantService:
                 points=[point],
             )
             
-            logger.info(f"Stored conversation for user {user_id}")
+            logger.info(f"Stored conversation for user {user_id}, session {session_id}")
             return point_id
             
         except Exception as e:
@@ -171,33 +172,41 @@ class QdrantService:
         self,
         user_id: str,
         limit: int = 50,
+        session_id: str = None,
     ) -> List[Dict[str, Any]]:
-        """Get conversation history for a specific user."""
+        """Get conversation history for a specific user, optionally filtered by session."""
         await self.initialize()
         
         try:
-            # Search with a zero vector to get all conversations for the user
-            zero_vector = [0.0] * self.vector_size
+            # Build filter conditions
+            filter_conditions = [
+                FieldCondition(
+                    key="user_id",
+                    match=MatchValue(value=user_id),
+                )
+            ]
             
-            query_filter = Filter(
-                must=[
+            # Add session filter if provided
+            if session_id:
+                filter_conditions.append(
                     FieldCondition(
-                        key="user_id",
-                        match=MatchValue(value=user_id),
+                        key="session_id",
+                        match=MatchValue(value=session_id),
                     )
-                ]
-            )
+                )
             
-            results = await self.client.search(
+            query_filter = Filter(must=filter_conditions)
+            
+            # Use scroll to get all matching conversations without vector similarity
+            results = await self.client.scroll(
                 collection_name=self.collection_name,
-                query_vector=zero_vector,
-                query_filter=query_filter,
+                scroll_filter=query_filter,
                 limit=limit,
                 with_payload=True,
             )
             
-            # Sort by timestamp
-            conversations = [result.payload for result in results]
+            # Sort by timestamp (most recent first)
+            conversations = [result.payload for result in results[0]]
             conversations.sort(
                 key=lambda x: x.get("timestamp", ""),
                 reverse=True,
@@ -207,6 +216,45 @@ class QdrantService:
             
         except Exception as e:
             logger.error(f"Error fetching user conversations: {e}")
+            return []
+    
+    async def get_session_conversations(
+        self,
+        session_id: str,
+        limit: int = 20,
+    ) -> List[Dict[str, Any]]:
+        """Get conversation history for a specific session."""
+        await self.initialize()
+        
+        try:
+            query_filter = Filter(
+                must=[
+                    FieldCondition(
+                        key="session_id",
+                        match=MatchValue(value=session_id),
+                    )
+                ]
+            )
+            
+            # Use scroll to get all matching conversations
+            results = await self.client.scroll(
+                collection_name=self.collection_name,
+                scroll_filter=query_filter,
+                limit=limit,
+                with_payload=True,
+            )
+            
+            # Sort by timestamp (chronological order, oldest first for conversation flow)
+            conversations = [result.payload for result in results[0]]
+            conversations.sort(
+                key=lambda x: x.get("timestamp", ""),
+                reverse=False,  # Oldest first for conversation context
+            )
+            
+            return conversations
+            
+        except Exception as e:
+            logger.error(f"Error fetching session conversations: {e}")
             return []
     
     async def update_conversation_response(

@@ -1,8 +1,5 @@
-
-version: '3.8'
-
 services:
-  # Qdrant Vector Database
+  # Vector database for semantic search
   qdrant:
     image: qdrant/qdrant:v1.7.4
     ports:
@@ -10,85 +7,116 @@ services:
       - "6334:6334"
     volumes:
       - qdrant_data:/qdrant/storage
-    environment:
-      - QDRANT__SERVICE__HTTP_PORT=6333
-      - QDRANT__SERVICE__GRPC_PORT=6334
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6333/health"]
+      test: ["CMD-SHELL", "timeout 5 bash -c '</dev/tcp/localhost/6333' || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 40s
 
-  # Backend FastAPI Service
+  # PostgreSQL database for customer service data
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: customer_service
+      POSTGRES_USER: cs_user
+      POSTGRES_PASSWORD: cs_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+      - ./infra/database/seed_data.sql:/docker-entrypoint-initdb.d/02-seed_data.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cs_user -d customer_service"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Main backend API
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    build: ./backend
     ports:
       - "8000:8000"
     environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
       - QDRANT_URL=http://qdrant:6333
-      - STRIPE_API_KEY=${STRIPE_API_KEY}
-      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
-      - CLIP_MODEL=${CLIP_MODEL:-openai/clip-vit-base-patch32}
-      - ENVIRONMENT=development
-    volumes:
-      - ./backend:/app
+      - DATABASE_URL=postgresql://cs_user:cs_password@postgres:5432/customer_service
+      - MCP_SERVER_URL=http://mcp_server:8001
+      - WORKER_URL=http://worker:8002
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
     depends_on:
       qdrant:
         condition: service_healthy
-    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+      postgres:
+        condition: service_healthy
+      mcp_server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
-  # MCP Server
+  # MCP Server for inter-service communication and tool access
   mcp_server:
-    build:
-      context: ./mcp_server
-      dockerfile: Dockerfile
+    build: ./mcp_server
     ports:
       - "8001:8001"
     environment:
+      - DATABASE_URL=postgresql://cs_user:cs_password@postgres:5432/customer_service
       - BACKEND_URL=http://backend:8000
       - WORKER_URL=http://worker:8002
-    volumes:
-      - ./mcp_server:/app
     depends_on:
-      - backend
-    command: uvicorn dispatcher:app --host 0.0.0.0 --port 8001 --reload
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
-  # Worker Service
+  # Worker service for background tasks
   worker:
-    build:
-      context: ./worker
-      dockerfile: Dockerfile
+    build: ./worker
     ports:
       - "8002:8002"
     environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - QDRANT_URL=http://qdrant:6333
-      - STRIPE_API_KEY=${STRIPE_API_KEY}
-    volumes:
-      - ./worker:/app
+      - DATABASE_URL=postgresql://cs_user:cs_password@postgres:5432/customer_service
+      - MCP_SERVER_URL=http://mcp_server:8001
+      - BACKEND_URL=http://backend:8000
     depends_on:
-      - qdrant
-    command: python worker.py
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
-  # Frontend React Dashboard
+  # Frontend React application
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
     ports:
-      - "5173:5173"
+      - "5173:8080"
     environment:
-      - VITE_API_URL=http://localhost:8000
-      - VITE_COPILOT_CLOUD_API_KEY=${VITE_COPILOT_CLOUD_API_KEY}
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
+      - VITE_API_BASE_URL=http://localhost:8000
+      - VITE_MCP_BASE_URL=http://localhost:8001
+      - VITE_WORKER_BASE_URL=http://localhost:8002
     depends_on:
       - backend
-    command: npm run dev -- --host 0.0.0.0
+      - mcp_server
+      - worker
 
 volumes:
   qdrant_data:
+  postgres_data:
+
+networks:
+  default:
+    name: app-network
