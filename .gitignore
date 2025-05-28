@@ -23,3 +23,16 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Python cache and build files
+__pycache__/
+*.egg-info/
+venv/
+env/
+.venv/
+
+# Node.js files
+package-lock.json
+
+# Development scripts
+demo-config.sh
