@@ -181,6 +181,126 @@ async def action_node(state: Dict[str, Any]) -> Dict[str, Any]:
                     state["actions_taken"].append("order_query_without_number")
                     logger.info("User asking about orders but no order number provided")
         
+        # Check for order history queries (e.g., "show me order history for customer123")
+        history_keywords = ["history", "orders", "past orders", "previous orders", "order list"]
+        if any(keyword in message for keyword in history_keywords):
+            # Look for customer identifier in the message
+            customer_patterns = [
+                r'customer(\d+)',  # customer123, customer1, etc.
+                r'customer\s+(\d+)',  # customer 123, customer 1, etc.
+                r'for\s+([a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+)',  # email addresses
+                r'user\s+id[:\s]+([a-zA-Z0-9-]+)',  # user id: xxx
+            ]
+            
+            customer_identifier = None
+            for pattern in customer_patterns:
+                match = re.search(pattern, message)
+                if match:
+                    if '@' in match.group(1):
+                        customer_identifier = match.group(1)  # email
+                    else:
+                        customer_identifier = f"customer{match.group(1)}"  # customer123 format
+                    break
+            
+            # Authorization check: Ensure user can only access their own data
+            requesting_user = state.get("user_id", "").lower()
+            
+            # Define authorized roles that can access any customer's data
+            authorized_agent_users = [
+                "customer_service_agent",
+                "support_agent", 
+                "admin",
+                "cs_agent",
+                "agent"
+            ]
+            
+            is_authorized_agent = any(role in requesting_user for role in authorized_agent_users)
+            
+            if customer_identifier:
+                # Check if user is requesting their own data or if they're an authorized agent
+                is_own_data = False
+                
+                if customer_identifier == requesting_user:
+                    is_own_data = True
+                elif customer_identifier.startswith("customer") and customer_identifier.replace("customer", "") in requesting_user:
+                    is_own_data = True
+                elif "@" in customer_identifier and customer_identifier == requesting_user:
+                    is_own_data = True
+                
+                # Allow access only if it's own data or user is an authorized agent
+                if is_own_data or is_authorized_agent:
+                    logger.info(f"Authorized order history request for customer: {customer_identifier} by user: {requesting_user}")
+                    
+                    # First, get customer info to validate and get details
+                    customer_result = await mcp_client.get_customer_by_identifier(customer_identifier)
+                    
+                    if customer_result.get("success") and customer_result.get("result", {}).get("success"):
+                        customer_info = customer_result["result"]["customer"]
+                        
+                        # Now get order history for this customer
+                        orders_result = await mcp_client.get_customer_orders(customer_info["email"], limit=10)
+                        
+                        if orders_result.get("success") and orders_result.get("result", {}).get("success"):
+                            state["customer_order_history"] = {
+                                "customer": customer_info,
+                                "orders": orders_result["result"]["orders"],
+                                "total_orders": orders_result["result"]["total_orders"]
+                            }
+                            state["actions_taken"].append(f"order_history_retrieved: {customer_identifier}")
+                            logger.info(f"Successfully retrieved order history for {customer_identifier}: {len(orders_result['result']['orders'])} orders")
+                        else:
+                            error_msg = orders_result.get("result", {}).get("error", "Unknown error")
+                            state["order_history_error"] = error_msg
+                            state["actions_taken"].append(f"order_history_failed: {customer_identifier} - {error_msg}")
+                            logger.warning(f"Order history lookup failed for {customer_identifier}: {error_msg}")
+                    else:
+                        error_msg = customer_result.get("result", {}).get("error", "Customer not found")
+                        state["customer_lookup_error"] = error_msg
+                        state["actions_taken"].append(f"customer_lookup_failed: {customer_identifier} - {error_msg}")
+                        logger.warning(f"Customer lookup failed for {customer_identifier}: {error_msg}")
+                else:
+                    # Unauthorized access attempt
+                    state["unauthorized_access_attempt"] = {
+                        "requested_customer": customer_identifier,
+                        "requesting_user": requesting_user,
+                        "reason": "User attempted to access another customer's order history"
+                    }
+                    state["actions_taken"].append(f"unauthorized_access_blocked: {requesting_user} tried to access {customer_identifier}")
+                    logger.warning(f"SECURITY: Unauthorized access attempt - User {requesting_user} tried to access order history for {customer_identifier}")
+            else:
+                # Generic order history request without specific customer
+                # For non-agents, assume they want their own order history
+                if not is_authorized_agent:
+                    customer_identifier = requesting_user
+                    logger.info(f"User {requesting_user} requesting their own order history")
+                    
+                    # Get customer info for the requesting user
+                    customer_result = await mcp_client.get_customer_by_identifier(customer_identifier)
+                    
+                    if customer_result.get("success") and customer_result.get("result", {}).get("success"):
+                        customer_info = customer_result["result"]["customer"]
+                        
+                        # Get order history for this customer
+                        orders_result = await mcp_client.get_customer_orders(customer_info["email"], limit=10)
+                        
+                        if orders_result.get("success") and orders_result.get("result", {}).get("success"):
+                            state["customer_order_history"] = {
+                                "customer": customer_info,
+                                "orders": orders_result["result"]["orders"],
+                                "total_orders": orders_result["result"]["total_orders"]
+                            }
+                            state["actions_taken"].append(f"own_order_history_retrieved: {customer_identifier}")
+                            logger.info(f"Successfully retrieved own order history for {customer_identifier}")
+                        else:
+                            state["actions_taken"].append("order_history_query_no_orders_found")
+                            logger.info(f"No order history found for user {requesting_user}")
+                    else:
+                        state["actions_taken"].append("order_history_query_user_not_found")
+                        logger.info(f"User {requesting_user} not found in customer database")
+                else:
+                    state["actions_taken"].append("order_history_query_without_customer")
+                    logger.info("Agent asking about order history but no customer identifier found")
+        
         # Check if the message contains payment-related keywords
         payment_keywords = ["pay", "payment", "invoice", "bill", "charge", "transaction"]
         
@@ -280,6 +400,33 @@ async def policy_node(state: Dict[str, Any]) -> Dict[str, Any]:
                         order_info += f"• Estimated Delivery: {shipment['estimated_delivery']}\n"
                 
                 ai_response = order_info
+            # Check for order history responses with real data
+            elif state.get("customer_order_history") and any("order_history_retrieved" in action for action in actions):
+                # Use real order history data to generate response
+                history_data = state["customer_order_history"]
+                customer = history_data["customer"]
+                orders = history_data["orders"]
+                
+                history_info = f"Here's the order history for {customer['full_name']} ({customer['email']}):\n\n"
+                history_info += f"Total Orders: {len(orders)}\n\n"
+                
+                for i, order in enumerate(orders, 1):
+                    history_info += f"{i}. Order #{order['order_number']}\n"
+                    history_info += f"   Date: {order['created_at'][:10]}\n"  # Just date part
+                    history_info += f"   Status: {order['status']}\n"
+                    history_info += f"   Amount: ${order['total_amount']}\n"
+                    history_info += f"   Payment: {order['payment_status']}\n"
+                    if order.get('delivered_at'):
+                        history_info += f"   Delivered: {order['delivered_at'][:10]}\n"
+                    elif order.get('shipped_at'):
+                        history_info += f"   Shipped: {order['shipped_at'][:10]}\n"
+                    history_info += "\n"
+                
+                ai_response = history_info
+            # Check for unauthorized access attempts
+            elif state.get("unauthorized_access_attempt"):
+                unauthorized_info = state["unauthorized_access_attempt"]
+                ai_response = "I'm sorry, but I cannot provide order history for other customers. For privacy and security reasons, you can only access your own order information. If you're a customer service agent, please use your authorized agent credentials."
             # Check for payment-related responses
             elif any("payment_intent_created" in action for action in actions):
                 payment_intent = state.get("payment_intent", {})
@@ -386,6 +533,46 @@ Shipping Information:
             order_error = state.get("order_lookup_error")
             if order_error:
                 current_context += f"\n\nOrder lookup error: {order_error}"
+            
+            # Add order history data if available
+            order_history = state.get("customer_order_history")
+            if order_history:
+                customer = order_history["customer"]
+                orders = order_history["orders"]
+                
+                history_info = f"""
+
+CUSTOMER ORDER HISTORY (use this accurate information):
+Customer: {customer['full_name']} ({customer['email']})
+Total Orders: {len(orders)}
+
+Order History:"""
+                for i, order in enumerate(orders, 1):
+                    history_info += f"""
+{i}. Order #{order['order_number']}
+   - Date: {order['created_at'][:10]}
+   - Status: {order['status']}
+   - Amount: ${order['total_amount']}
+   - Payment: {order['payment_status']}"""
+                    if order.get('delivered_at'):
+                        history_info += f"\n   - Delivered: {order['delivered_at'][:10]}"
+                    elif order.get('shipped_at'):
+                        history_info += f"\n   - Shipped: {order['shipped_at'][:10]}"
+                
+                current_context += history_info
+            
+            # Add unauthorized access attempt information if any
+            unauthorized_attempt = state.get("unauthorized_access_attempt")
+            if unauthorized_attempt:
+                security_info = f"""
+
+SECURITY ALERT - UNAUTHORIZED ACCESS ATTEMPT:
+Requesting User: {unauthorized_attempt['requesting_user']}
+Requested Customer: {unauthorized_attempt['requested_customer']}
+Reason: {unauthorized_attempt['reason']}
+
+IMPORTANT: Deny this request and explain privacy/security policies. Only authorized agents can access other customers' data."""
+                current_context += security_info
             
             # Add customer data if available
             customer_data = state.get("customer_data")

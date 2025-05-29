@@ -1,0 +1,163 @@
+graph TB
+    subgraph "Memory Input Sources"
+        UI[👤 User Input<br/>Message + Session ID<br/>User Identifier]
+        CT[🕒 Current Time<br/>Timestamp<br/>Context Window]
+    end
+
+    subgraph "Session Memory Management"
+        SM[💭 Session Memory<br/>Current Conversation]
+
+        subgraph "Session Storage"
+            SC[📝 Session Cache<br/>Real-time Context]
+            SH[📚 Session History<br/>Full Conversation]
+            SW[🪟 Session Window<br/>Recent Messages]
+        end
+    end
+
+    subgraph "User Memory Management"
+        UM[👤 User Memory<br/>Cross-Session History]
+
+        subgraph "User Storage"
+            UP[📋 User Profile<br/>Persistent Context]
+            UH[🗂️ User History<br/>All Conversations]
+            UO[📦 User Orders<br/>Business Context]
+        end
+    end
+
+    subgraph "Semantic Memory Management"
+        SEM[🔍 Semantic Memory<br/>Vector Embeddings]
+
+        subgraph "Vector Storage"
+            VE[🎯 Vector Embeddings<br/>CLIP + OpenAI]
+            SS[🔎 Semantic Search<br/>Similar Conversations]
+            CR[🔗 Contextual Retrieval<br/>Relevant History]
+        end
+    end
+
+    subgraph "Business Data Integration"
+        BD[🗄️ Business Data<br/>PostgreSQL Integration]
+
+        subgraph "Data Sources"
+            CD[👥 Customer Data<br/>Profile & Contact]
+            OD[📦 Order Data<br/>Purchase History]
+            SD[🚚 Shipping Data<br/>Fulfillment Status]
+            TD[🎫 Ticket Data<br/>Support History]
+        end
+    end
+
+    subgraph "Memory Processing Engine"
+        MPE[⚙️ Memory Processor<br/>Context Assembly]
+
+        subgraph "Processing Steps"
+            MC[🔄 Memory Consolidation<br/>Combine Sources]
+            CF[📊 Context Filtering<br/>Relevance Scoring]
+            CP[🎯 Context Prioritization<br/>Importance Ranking]
+        end
+    end
+
+    subgraph "AI Context Generation"
+        ACG[🧠 AI Context<br/>LLM Ready Format]
+
+        subgraph "Context Components"
+            CC[💬 Conversation Context<br/>Recent Messages]
+            BC[📊 Business Context<br/>Customer Data]
+            HC[📚 Historical Context<br/>Past Interactions]
+            SC2[🔍 Semantic Context<br/>Related Conversations]
+        end
+    end
+
+    subgraph "Security & Authorization"
+        SA[🔐 Security Layer<br/>Access Control]
+
+        subgraph "Security Rules"
+            RC[👤 Role Check<br/>Customer vs Agent]
+            DP[🛡️ Data Permissions<br/>Own vs Others Data]
+            AL[📝 Access Logging<br/>Audit Trail]
+        end
+    end
+
+    %% Input Flow
+    UI --> SM
+    UI --> UM
+    CT --> MPE
+
+    %% Session Memory Flow
+    SM --> SC
+    SM --> SH
+    SM --> SW
+
+    %% User Memory Flow
+    UM --> UP
+    UM --> UH
+    UM --> UO
+
+    %% Semantic Memory Flow
+    SEM --> VE
+    SEM --> SS
+    SEM --> CR
+
+    %% Business Data Flow
+    BD --> CD
+    BD --> OD
+    BD --> SD
+    BD --> TD
+
+    %% Processing Flow
+    SC --> MPE
+    SH --> MPE
+    UP --> MPE
+    UH --> MPE
+    VE --> MPE
+    CD --> MPE
+    OD --> MPE
+
+    MPE --> MC
+    MC --> CF
+    CF --> CP
+
+    %% Context Generation
+    CP --> ACG
+    ACG --> CC
+    ACG --> BC
+    ACG --> HC
+    ACG --> SC2
+
+    %% Security Integration
+    SA --> RC
+    SA --> DP
+    SA --> AL
+    RC --> ACG
+    DP --> BD
+    AL --> MPE
+
+    %% Memory Persistence
+    ACG -->|Store| SH
+    ACG -->|Update| UP
+    ACG -->|Index| VE
+
+    %% Memory Types and Characteristics
+    subgraph "Memory Characteristics"
+        MT1[🔄 Session Memory<br/>• Temporary<br/>• High Priority<br/>• Conversation Flow]
+        MT2[👤 User Memory<br/>• Persistent<br/>• Personal Context<br/>• Cross-Session]
+        MT3[🔍 Semantic Memory<br/>• Searchable<br/>• Pattern Matching<br/>• Knowledge Base]
+        MT4[📊 Business Memory<br/>• Authoritative<br/>• Real-time<br/>• Transaction Data]
+    end
+
+    %% Styling
+    classDef session fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    classDef user fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    classDef semantic fill:#e8f5e8,stroke:#388e3c,stroke-width:2px
+    classDef business fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    classDef processing fill:#fce4ec,stroke:#c2185b,stroke-width:2px
+    classDef context fill:#e0f2f1,stroke:#00796b,stroke-width:2px
+    classDef security fill:#ffebee,stroke:#d32f2f,stroke-width:2px
+    classDef memory fill:#f9fbe7,stroke:#689f38,stroke-width:2px
+
+    class SM,SC,SH,SW session
+    class UM,UP,UH,UO user
+    class SEM,VE,SS,CR semantic
+    class BD,CD,OD,SD,TD business
+    class MPE,MC,CF,CP processing
+    class ACG,CC,BC,HC,SC2 context
+    class SA,RC,DP,AL security
+    class MT1,MT2,MT3,MT4 memory

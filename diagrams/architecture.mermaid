@@ -1,0 +1,134 @@
+graph TB
+    subgraph "Client Layer"
+        U[👤 User<br/>Customer/Agent]
+        B[🌐 Browser<br/>React Frontend]
+    end
+
+    subgraph "Frontend Layer"
+        FE[⚛️ React Frontend<br/>TypeScript + Tailwind<br/>Port 5173]
+        UI[🎨 Modern UI<br/>Chat Interface<br/>Dashboard]
+    end
+
+    subgraph "API Gateway Layer"
+        BE[🚀 FastAPI Backend<br/>Python 3.12<br/>Port 8000]
+        MW[🔒 Security Middleware<br/>Authorization<br/>Session Management]
+    end
+
+    subgraph "AI Processing Layer"
+        LG[🤖 LangGraph Agent<br/>Workflow Orchestration<br/>Node Processing]
+
+        subgraph "AI Nodes"
+            AN[📝 Action Node<br/>Query Classification<br/>Security Checks]
+            PN[💬 Policy Node<br/>Response Generation<br/>Context Integration]
+            SN[😊 Sentiment Node<br/>RoBERTa Analysis<br/>Emotion Detection]
+        end
+
+        OAI[🧠 OpenAI GPT-4o-mini<br/>Intelligent Responses<br/>Function Calling]
+    end
+
+    subgraph "Data Processing Layer"
+        MCP[🔧 MCP Server<br/>Model Context Protocol<br/>Port 8001]
+
+        subgraph "MCP Tools"
+            T1[📊 Customer Lookup<br/>get_customer_by_identifier]
+            T2[📋 Order History<br/>get_customer_orders_by_id]
+            T3[🔍 Order Details<br/>get_order_details]
+        end
+    end
+
+    subgraph "Data Storage Layer"
+        PG[(🐘 PostgreSQL<br/>Business Database<br/>Port 5432)]
+        QD[(🔍 Qdrant<br/>Vector Memory<br/>Port 6333)]
+
+        subgraph "PostgreSQL Tables"
+            C[👥 Customers]
+            O[📦 Orders]
+            P[🛍️ Products]
+            S[🚚 Shipments]
+            T[🎫 Support Tickets]
+        end
+
+        subgraph "Qdrant Collections"
+            CM[💭 Conversations<br/>Session Memory]
+            UH[👤 User History<br/>Cross-Session]
+            SM[🔍 Semantic Search<br/>Vector Embeddings]
+        end
+    end
+
+    subgraph "Background Services"
+        WK[⚙️ Worker Service<br/>Async Tasks<br/>Port 8002]
+        BG[🔄 Background Jobs<br/>Heavy Processing<br/>Cleanup Tasks]
+    end
+
+    subgraph "Security & Authorization"
+        AUTH[🔐 Authorization Engine<br/>Role-Based Access<br/>Customer Data Protection]
+
+        subgraph "User Roles"
+            CUST[👤 Customer<br/>Own Data Only]
+            CSA[👨‍💼 CS Agent<br/>All Customer Data]
+            ADMIN[👑 Admin<br/>Full Access]
+        end
+    end
+
+    %% User Flow
+    U --> B
+    B --> FE
+    FE --> UI
+
+    %% API Flow
+    FE -->|REST API| BE
+    BE --> MW
+    MW --> LG
+
+    %% AI Processing Flow
+    LG --> AN
+    LG --> PN
+    LG --> SN
+    AN --> AUTH
+    PN --> OAI
+
+    %% Data Access Flow
+    LG --> MCP
+    MCP --> T1
+    MCP --> T2
+    MCP --> T3
+    T1 --> PG
+    T2 --> PG
+    T3 --> PG
+
+    %% Database Connections
+    PG --> C
+    PG --> O
+    PG --> P
+    PG --> S
+    PG --> T
+
+    %% Memory Management
+    BE --> QD
+    QD --> CM
+    QD --> UH
+    QD --> SM
+
+    %% Background Processing
+    BE --> WK
+    WK --> BG
+
+    %% Security
+    AUTH --> CUST
+    AUTH --> CSA
+    AUTH --> ADMIN
+
+    %% Styling
+    classDef frontend fill:#e1f5fe,stroke:#0277bd,stroke-width:2px
+    classDef backend fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    classDef ai fill:#e8f5e8,stroke:#2e7d32,stroke-width:2px
+    classDef database fill:#fff3e0,stroke:#ef6c00,stroke-width:2px
+    classDef security fill:#ffebee,stroke:#c62828,stroke-width:2px
+    classDef service fill:#f1f8e9,stroke:#558b2f,stroke-width:2px
+
+    class FE,UI frontend
+    class BE,MW backend
+    class LG,AN,PN,SN,OAI ai
+    class PG,QD,C,O,P,S,T,CM,UH,SM database
+    class AUTH,CUST,CSA,ADMIN security
+    class MCP,T1,T2,T3,WK,BG service

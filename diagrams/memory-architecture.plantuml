@@ -1,0 +1,192 @@
+@startuml Memory Architecture
+
+!theme cerulean-outline
+title Agent Conversational Compass - Memory Management Architecture
+
+' Memory Input Sources
+package "Memory Input Sources" #f3e5f5 {
+    component "User Input" as user_input {
+        [Message Content] as message
+        [Session ID] as session_id
+        [User Identifier] as user_id
+        [Timestamp] as timestamp
+    }
+}
+
+' Session Memory Management
+package "Session Memory Management" #e3f2fd {
+    component "Session Memory" as session_memory {
+        [Current Conversation] as current_conv
+        [Real-time Context] as realtime
+    }
+    
+    database "Session Storage" as session_storage {
+        entity "Session Cache" as session_cache
+        entity "Session History" as session_history
+        entity "Session Window" as session_window
+    }
+}
+
+' User Memory Management
+package "User Memory Management" #f3e5f5 {
+    component "User Memory" as user_memory {
+        [Cross-Session History] as cross_session
+        [Persistent Context] as persistent
+    }
+    
+    database "User Storage" as user_storage {
+        entity "User Profile" as user_profile
+        entity "User History" as user_history
+        entity "User Orders" as user_orders
+    }
+}
+
+' Semantic Memory Management
+package "Semantic Memory Management" #e8f5e8 {
+    component "Semantic Memory" as semantic_memory {
+        [Vector Embeddings] as embeddings
+        [Similar Conversations] as similar
+    }
+    
+    database "Vector Storage" as vector_storage {
+        entity "CLIP Embeddings" as clip
+        entity "OpenAI Embeddings" as openai_embed
+        entity "Semantic Search" as semantic_search
+        entity "Context Retrieval" as context_retrieval
+    }
+}
+
+' Business Data Integration
+package "Business Data Integration" #fff3e0 {
+    component "Business Memory" as business_memory {
+        [PostgreSQL Integration] as postgres_int
+        [Real-time Data] as realtime_data
+    }
+    
+    database "Business Data" as business_data {
+        entity "Customer Data" as customer_data
+        entity "Order Data" as order_data
+        entity "Shipping Data" as shipping_data
+        entity "Support Tickets" as support_data
+    }
+}
+
+' Memory Processing Engine
+package "Memory Processing Engine" #fce4ec {
+    component "Memory Processor" as memory_processor {
+        [Context Assembly] as assembly
+        [Relevance Scoring] as scoring
+        [Priority Ranking] as ranking
+    }
+    
+    component "Processing Steps" as processing {
+        [Memory Consolidation] as consolidation
+        [Context Filtering] as filtering
+        [Context Prioritization] as prioritization
+    }
+}
+
+' AI Context Generation
+package "AI Context Generation" #e0f2f1 {
+    component "AI Context" as ai_context {
+        [LLM Ready Format] as llm_format
+        [Context Window] as context_window
+    }
+    
+    component "Context Components" as context_components {
+        [Conversation Context] as conv_context
+        [Business Context] as biz_context
+        [Historical Context] as hist_context
+        [Semantic Context] as sem_context
+    }
+}
+
+' Security & Authorization
+package "Security & Authorization" #ffebee {
+    component "Security Layer" as security {
+        [Access Control] as access_control
+        [Data Permissions] as permissions
+        [Audit Logging] as logging
+    }
+    
+    component "Security Rules" as security_rules {
+        [Role Check] as role_check
+        [Data Protection] as data_protection
+        [Access Logging] as access_log
+    }
+}
+
+' Memory Flow Connections
+user_input --> session_memory : "Store Message"
+user_input --> user_memory : "Update Profile"
+
+session_memory --> session_storage
+session_storage --> session_cache
+session_storage --> session_history
+session_storage --> session_window
+
+user_memory --> user_storage
+user_storage --> user_profile
+user_storage --> user_history
+user_storage --> user_orders
+
+semantic_memory --> vector_storage
+vector_storage --> clip
+vector_storage --> openai_embed
+vector_storage --> semantic_search
+vector_storage --> context_retrieval
+
+business_memory --> business_data
+business_data --> customer_data
+business_data --> order_data
+business_data --> shipping_data
+business_data --> support_data
+
+' Processing Flow
+session_cache --> memory_processor
+session_history --> memory_processor
+user_profile --> memory_processor
+user_history --> memory_processor
+clip --> memory_processor
+customer_data --> memory_processor
+order_data --> memory_processor
+
+memory_processor --> processing
+processing --> consolidation
+consolidation --> filtering
+filtering --> prioritization
+
+prioritization --> ai_context
+ai_context --> context_components
+context_components --> conv_context
+context_components --> biz_context
+context_components --> hist_context
+context_components --> sem_context
+
+' Security Integration
+security --> security_rules
+security_rules --> role_check
+security_rules --> data_protection
+security_rules --> access_log
+
+role_check --> ai_context : "Authorization Check"
+data_protection --> business_data : "Filter Access"
+access_log --> memory_processor : "Log Activity"
+
+' Memory Persistence
+ai_context --> session_history : "Store Conversation"
+ai_context --> user_profile : "Update Profile"
+ai_context --> openai_embed : "Create Embeddings"
+
+' Notes
+note top of session_memory : "Temporary memory for\ncurrent conversation\nwith high priority"
+
+note top of user_memory : "Persistent memory\nacross sessions with\npersonal context"
+
+note top of semantic_memory : "Vector embeddings\nfor pattern matching\nand knowledge retrieval"
+
+note top of business_memory : "Authoritative business\ndata with real-time\ntransaction information"
+
+note bottom of security : "Role-based access:\n- Customers: own data only\n- Agents: all customer data\n- Comprehensive audit trail"
+
+@enduml 

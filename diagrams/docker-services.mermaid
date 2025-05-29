@@ -1,0 +1,150 @@
+graph TB
+    subgraph "Docker Host Environment"
+        subgraph "Database Tier"
+            PG[🐘 PostgreSQL Database<br/>🔧 Service: postgres<br/>📊 Business Data<br/>🌐 Port: 5432<br/>💾 Volume: pg_data]
+            QD[🔍 Qdrant Vector DB<br/>🔧 Service: qdrant<br/>💭 Conversation Memory<br/>🌐 Port: 6333<br/>💾 Volume: qdrant_data]
+        end
+
+        subgraph "Backend Services Tier"
+            MCP[🔧 MCP Server<br/>🔧 Service: mcp_server<br/>🛠️ Database Tools<br/>🌐 Port: 8001<br/>📡 Health: /health]
+
+            BE[🚀 FastAPI Backend<br/>🔧 Service: backend<br/>🎯 Main API Logic<br/>🌐 Port: 8000<br/>📡 Health: /health]
+
+            WK[⚙️ Worker Service<br/>🔧 Service: worker<br/>🔄 Background Tasks<br/>🌐 Port: 8002<br/>📡 Health: /health]
+        end
+
+        subgraph "Frontend Tier"
+            FE[⚛️ React Frontend<br/>🔧 Service: frontend<br/>🎨 User Interface<br/>🌐 Port: 5173<br/>📦 Built with Vite]
+        end
+    end
+
+    subgraph "External Services"
+        OAI[🧠 OpenAI API<br/>GPT-4o-mini<br/>🔑 API Key Required]
+        DNS[🌐 External DNS<br/>Domain Resolution]
+    end
+
+    subgraph "Development Tools"
+        DK[🐳 Docker Engine<br/>Container Runtime]
+        DC[🐙 Docker Compose<br/>Service Orchestration]
+        VL[💾 Docker Volumes<br/>Persistent Storage]
+    end
+
+    %% Service Dependencies
+    BE --> PG
+    BE --> QD
+    BE --> MCP
+    BE --> WK
+    BE --> OAI
+
+    MCP --> PG
+
+    FE --> BE
+
+    %% Docker Infrastructure
+    DK --> PG
+    DK --> QD
+    DK --> MCP
+    DK --> BE
+    DK --> WK
+    DK --> FE
+
+    DC --> DK
+    VL --> PG
+    VL --> QD
+
+    %% External Dependencies
+    BE --> OAI
+    FE --> DNS
+
+    %% Service Details
+    subgraph "Service Configuration Details"
+        subgraph "PostgreSQL Configuration"
+            PG_ENV[📝 Environment:<br/>POSTGRES_DB=customer_service<br/>POSTGRES_USER=cs_user<br/>POSTGRES_PASSWORD=cs_password]
+            PG_VOL[💾 Volume Mounts:<br/>/var/lib/postgresql/data<br/>Persistent database storage]
+            PG_NET[🌐 Networks:<br/>app-network<br/>Internal service discovery]
+        end
+
+        subgraph "Qdrant Configuration"
+            QD_ENV[📝 Environment:<br/>QDRANT__SERVICE__HTTP_PORT=6333<br/>Vector database config]
+            QD_VOL[💾 Volume Mounts:<br/>/qdrant/storage<br/>Vector data persistence]
+            QD_NET[🌐 Networks:<br/>app-network<br/>REST API access]
+        end
+
+        subgraph "MCP Server Configuration"
+            MCP_ENV[📝 Environment:<br/>DATABASE_URL=postgresql://...<br/>ENVIRONMENT=development]
+            MCP_DEP[🔗 Dependencies:<br/>postgres (healthy)<br/>Database connection required]
+            MCP_VOL[📁 Code Mount:<br/>./mcp_server:/app<br/>Development mode]
+        end
+
+        subgraph "Backend Configuration"
+            BE_ENV[📝 Environment:<br/>OPENAI_API_KEY=sk-...<br/>QDRANT_URL=http://qdrant:6333<br/>MCP_SERVER_URL=http://mcp_server:8001]
+            BE_DEP[🔗 Dependencies:<br/>qdrant (healthy)<br/>mcp_server (healthy)<br/>postgres (healthy)]
+            BE_VOL[📁 Code Mount:<br/>./backend:/app<br/>Development mode]
+        end
+
+        subgraph "Worker Configuration"
+            WK_ENV[📝 Environment:<br/>CELERY_BROKER_URL=redis://...<br/>Background task config]
+            WK_DEP[🔗 Dependencies:<br/>backend (healthy)<br/>Shared dependencies]
+            WK_VOL[📁 Code Mount:<br/>./worker:/app<br/>Development mode]
+        end
+
+        subgraph "Frontend Configuration"
+            FE_ENV[📝 Environment:<br/>VITE_API_BASE_URL=http://localhost:8000<br/>Backend API endpoint]
+            FE_DEP[🔗 Dependencies:<br/>backend (healthy)<br/>API availability required]
+            FE_VOL[📁 Code Mount:<br/>./frontend:/app<br/>Development mode with HMR]
+        end
+    end
+
+    %% Health Checks
+    subgraph "Health Monitoring"
+        HC[🏥 Health Checks<br/>Docker Compose]
+
+        HC --> PG : "pg_isready -U cs_user"
+        HC --> QD : "curl http://localhost:6333/health"
+        HC --> MCP : "curl http://localhost:8001/health"
+        HC --> BE : "curl http://localhost:8000/health"
+        HC --> WK : "curl http://localhost:8002/health"
+        HC --> FE : "curl http://localhost:5173"
+    end
+
+    %% Data Flow Paths
+    subgraph "Data Flow Patterns"
+        DF1[📊 Customer Query Flow<br/>Frontend → Backend → MCP → PostgreSQL]
+        DF2[💭 Memory Storage Flow<br/>Backend → Qdrant → Vector Storage]
+        DF3[🤖 AI Processing Flow<br/>Backend → LangGraph → OpenAI → Response]
+        DF4[🔄 Background Task Flow<br/>Backend → Worker → Async Processing]
+    end
+
+    %% Network Configuration
+    subgraph "Docker Networks"
+        NET[🌐 app-network<br/>Bridge Network<br/>Internal Service Discovery]
+
+        NET --> PG : "postgres:5432"
+        NET --> QD : "qdrant:6333"
+        NET --> MCP : "mcp_server:8001"
+        NET --> BE : "backend:8000"
+        NET --> WK : "worker:8002"
+        NET --> FE : "frontend:5173"
+    end
+
+    %% Port Mappings
+    subgraph "Port Mappings"
+        PORTS[🌐 Host Port Mappings<br/>localhost:5173 → frontend:5173<br/>localhost:8000 → backend:8000<br/>localhost:8001 → mcp_server:8001<br/>localhost:8002 → worker:8002<br/>localhost:6333 → qdrant:6333<br/>localhost:5432 → postgres:5432]
+    end
+
+    %% Styling
+    classDef database fill:#fff3e0,stroke:#ef6c00,stroke-width:3px
+    classDef backend fill:#f3e5f5,stroke:#7b1fa2,stroke-width:3px
+    classDef frontend fill:#e1f5fe,stroke:#0277bd,stroke-width:3px
+    classDef external fill:#ffebee,stroke:#c62828,stroke-width:2px
+    classDef infrastructure fill:#f1f8e9,stroke:#558b2f,stroke-width:2px
+    classDef config fill:#fafafa,stroke:#616161,stroke-width:1px
+    classDef network fill:#e8eaf6,stroke:#3f51b5,stroke-width:2px
+
+    class PG,QD database
+    class MCP,BE,WK backend
+    class FE frontend
+    class OAI,DNS external
+    class DK,DC,VL infrastructure
+    class PG_ENV,PG_VOL,PG_NET,QD_ENV,QD_VOL,QD_NET,MCP_ENV,MCP_DEP,MCP_VOL,BE_ENV,BE_DEP,BE_VOL,WK_ENV,WK_DEP,WK_VOL,FE_ENV,FE_DEP,FE_VOL config
+    class NET,PORTS network

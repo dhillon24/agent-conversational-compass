@@ -1,0 +1,151 @@
+@startuml Customer Service Conversation Flow
+
+!theme cerulean-outline
+title Customer Service AI - Complete Conversation Flow
+
+' Participants
+actor "User" as user #lightblue
+participant "Frontend\n(React)" as frontend #e3f2fd
+participant "Backend\n(FastAPI)" as backend #f3e5f5
+participant "Security\nMiddleware" as security #ffebee
+participant "LangGraph\nAgent" as langgraph #e8f5e8
+participant "Action\nNode" as action #e8f5e8
+participant "Auth\nEngine" as auth #ffebee
+participant "MCP\nServer" as mcp #fff3e0
+participant "PostgreSQL\nDatabase" as postgres #fff8e1
+participant "Policy\nNode" as policy #e8f5e8
+participant "OpenAI\nGPT-4o-mini" as openai #e0f7fa
+participant "Qdrant\nVector DB" as qdrant #e8f5e8
+participant "Sentiment\nAnalysis" as sentiment #e8f5e8
+
+' Message sequence
+group Customer Service Query
+    user -> frontend : Send message:\n"Show me order history for customer123"
+    activate frontend
+    
+    frontend -> backend : POST /chat\n{user, message, session_id}
+    activate backend
+    
+    backend -> security : Process request
+    activate security
+    
+    security -> qdrant : Check session history
+    activate qdrant
+    qdrant --> security : Return session context
+    deactivate qdrant
+    
+    security -> langgraph : Route to agent
+    activate langgraph
+    deactivate security
+end
+
+group AI Processing
+    langgraph -> sentiment : Analyze sentiment
+    activate sentiment
+    sentiment --> langgraph : Sentiment: 0.8 (positive)
+    deactivate sentiment
+    
+    langgraph -> action : Classify action type
+    activate action
+    
+    action -> action : Regex pattern matching:\n"order history for customer123"
+    
+    action -> auth : Security authorization check
+    activate auth
+    
+    note over auth : Role-based access control:\nCheck if user authorized for\ncustomer123 data
+    
+    alt User is Customer Service Agent
+        auth --> action : ✅ AUTHORIZED\n(agent can access any customer)
+        
+        action -> mcp : get_customer_by_identifier("customer123")
+        activate mcp
+        
+        mcp -> postgres : SELECT * FROM customers\nWHERE friendly_name='customer123'
+        activate postgres
+        postgres --> mcp : Customer data:\nTest User (test_user@email.com)
+        deactivate postgres
+        
+        mcp --> action : Customer found: UUID abc123
+        
+        action -> mcp : get_customer_orders_by_id(customer_uuid)
+        
+        mcp -> postgres : SELECT orders.*, products.name,\nshipments.status FROM orders\nJOIN order_items...
+        activate postgres
+        postgres --> mcp : Order #123: Wireless Headphones\n+ Case, $258.37, Shipped
+        deactivate postgres
+        
+        mcp --> action : Complete order history
+        deactivate mcp
+        
+    else User is customer123
+        auth --> action : ✅ AUTHORIZED\n(own data access)
+        note right : Same database queries as above
+        
+    else User is different customer
+        auth --> action : ❌ UNAUTHORIZED\nACCESS BLOCKED
+        action -> action : Log security violation
+        action --> policy : Security error response
+    end
+    
+    deactivate auth
+end
+
+group Response Generation (Authorized Path)
+    action -> policy : Action result + order data
+    activate policy
+    deactivate action
+    
+    policy -> qdrant : Retrieve conversation memory
+    activate qdrant
+    qdrant --> policy : Session history + user context
+    deactivate qdrant
+    
+    policy -> openai : Generate response with context:\n• Order data: Order #123\n• Customer: Test User\n• Conversation history
+    activate openai
+    
+    note over openai : GPT-4o-mini processes\nwith full context
+    
+    openai --> policy : "Test User has Order #123:\nWireless Headphones and\nSmartphone Case for $258.37,\nshipped via FedEx..."
+    deactivate openai
+end
+
+group Memory Storage & Response
+    policy -> qdrant : Store conversation turn
+    activate qdrant
+    
+    note over qdrant : Update session memory\nUpdate user history\nCreate embeddings
+    
+    qdrant -> qdrant : Vector indexing for\nsemantic search
+    deactivate qdrant
+    
+    policy --> langgraph : Complete response
+    deactivate policy
+    
+    langgraph --> backend : Response with\nsentiment metadata
+    deactivate langgraph
+    
+    backend -> qdrant : Final conversation storage
+    activate qdrant
+    deactivate qdrant
+    
+    backend --> frontend : JSON response
+    deactivate backend
+    
+    frontend --> user : Display order history
+    deactivate frontend
+end
+
+' Background processing note
+note over qdrant : Background: Vector indexing,\nsemantic search preparation
+
+' Security layer highlight
+note over auth, postgres #ffebee : Security Layer: All database access is authorized\nCustomers can only access own data\nAgents can access any customer data
+
+' Memory layer highlight
+note over qdrant, sentiment #e8f5e8 : Memory Layer: Session tracking, cross-session history\nSemantic search, conversation continuity
+
+' AI layer highlight
+note over openai, policy #e0f7fa : AI Layer: Context-aware responses using real data\nNo hallucination, intelligent conversation flow
+
+@enduml 

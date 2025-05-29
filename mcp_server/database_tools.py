@@ -393,6 +393,171 @@ class DatabaseTools:
                 "query": query
             }
 
+    async def get_customer_orders_by_id(self, customer_id: str, limit: int = 10) -> Dict[str, Any]:
+        """
+        Get recent orders for a customer by customer ID (UUID).
+        
+        Args:
+            customer_id: Customer's UUID
+            limit: Maximum number of orders to return
+            
+        Returns:
+            Dictionary containing customer orders or error message
+        """
+        try:
+            async with self.pool.acquire() as conn:
+                # First get customer info
+                customer_query = """
+                    SELECT email, first_name, last_name, phone, status
+                    FROM customers
+                    WHERE id = $1
+                """
+                customer_row = await conn.fetchrow(customer_query, customer_id)
+                
+                if not customer_row:
+                    return {
+                        "success": False,
+                        "error": f"Customer with ID {customer_id} not found",
+                        "customer_id": customer_id
+                    }
+                
+                # Get orders for this customer
+                orders_query = """
+                    SELECT 
+                        o.order_number, o.status, o.total_amount, o.created_at,
+                        o.shipped_at, o.delivered_at, o.payment_status
+                    FROM orders o
+                    WHERE o.customer_id = $1
+                    ORDER BY o.created_at DESC
+                    LIMIT $2
+                """
+                
+                order_rows = await conn.fetch(orders_query, customer_id, limit)
+                
+                orders = [
+                    {
+                        "order_number": row['order_number'],
+                        "status": row['status'],
+                        "payment_status": row['payment_status'],
+                        "total_amount": float(row['total_amount']),
+                        "created_at": row['created_at'].isoformat(),
+                        "shipped_at": row['shipped_at'].isoformat() if row['shipped_at'] else None,
+                        "delivered_at": row['delivered_at'].isoformat() if row['delivered_at'] else None
+                    }
+                    for row in order_rows
+                ]
+                
+                return {
+                    "success": True,
+                    "customer_id": customer_id,
+                    "customer_info": {
+                        "name": f"{customer_row['first_name']} {customer_row['last_name']}",
+                        "email": customer_row['email'],
+                        "phone": customer_row['phone'],
+                        "status": customer_row['status']
+                    },
+                    "orders": orders,
+                    "total_orders": len(orders)
+                }
+                
+        except Exception as e:
+            logger.error(f"Error getting customer orders for ID {customer_id}: {e}")
+            return {
+                "success": False,
+                "error": f"Database error: {str(e)}",
+                "customer_id": customer_id
+            }
+
+    async def get_customer_by_identifier(self, identifier: str) -> Dict[str, Any]:
+        """
+        Get customer information by various identifiers (email, customer ID, or friendly name).
+        Supports friendly identifiers like "customer123" by mapping to actual customer data.
+        
+        Args:
+            identifier: Customer identifier (email, UUID, or friendly name)
+            
+        Returns:
+            Dictionary containing customer details or error message
+        """
+        try:
+            async with self.pool.acquire() as conn:
+                # Create a mapping of friendly identifiers to actual customer emails
+                # This allows us to support "customer123" style identifiers
+                friendly_mapping = {
+                    "customer123": "test_user@email.com",
+                    "customer1": "john.doe@email.com", 
+                    "customer2": "jane.smith@email.com",
+                    "customer3": "mike.johnson@email.com",
+                    "customer4": "sarah.wilson@email.com",
+                    "customer5": "alex.brown@email.com",
+                    "customer6": "lisa.davis@email.com",
+                }
+                
+                # If it's a friendly identifier, map it to email
+                if identifier.lower() in friendly_mapping:
+                    identifier = friendly_mapping[identifier.lower()]
+                
+                query = None
+                param = identifier
+                
+                # Try to determine if it's an email, UUID, or name
+                if "@" in identifier:
+                    # Email lookup
+                    query = """
+                        SELECT id, email, first_name, last_name, phone, status, created_at
+                        FROM customers
+                        WHERE email = $1
+                    """
+                elif len(identifier) == 36 and identifier.count('-') == 4:
+                    # UUID lookup
+                    query = """
+                        SELECT id, email, first_name, last_name, phone, status, created_at
+                        FROM customers
+                        WHERE id = $1
+                    """
+                else:
+                    # Name lookup (first name, last name, or full name)
+                    query = """
+                        SELECT id, email, first_name, last_name, phone, status, created_at
+                        FROM customers
+                        WHERE 
+                            first_name ILIKE $1 OR
+                            last_name ILIKE $1 OR
+                            CONCAT(first_name, ' ', last_name) ILIKE $1
+                    """
+                    param = f"%{identifier}%"
+                
+                row = await conn.fetchrow(query, param)
+                
+                if not row:
+                    return {
+                        "success": False,
+                        "error": f"Customer '{identifier}' not found. Supported formats: email, customer ID, or friendly names like 'customer123'",
+                        "identifier": identifier
+                    }
+                
+                return {
+                    "success": True,
+                    "customer": {
+                        "id": str(row['id']),
+                        "email": row['email'],
+                        "first_name": row['first_name'],
+                        "last_name": row['last_name'],
+                        "full_name": f"{row['first_name']} {row['last_name']}",
+                        "phone": row['phone'],
+                        "status": row['status'],
+                        "created_at": row['created_at'].isoformat()
+                    }
+                }
+                
+        except Exception as e:
+            logger.error(f"Error getting customer by identifier {identifier}: {e}")
+            return {
+                "success": False,
+                "error": f"Database error: {str(e)}",
+                "identifier": identifier
+            }
+
 
 # Global database tools instance
 db_tools = DatabaseTools() 

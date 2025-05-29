@@ -102,6 +102,39 @@ MCP_TOOLS = {
             "required": ["customer_email"]
         }
     },
+    "get_customer_orders_by_id": {
+        "name": "get_customer_orders_by_id",
+        "description": "Get recent orders for a customer by their customer ID (UUID)",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "customer_id": {
+                    "type": "string",
+                    "description": "Customer's UUID identifier"
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum number of orders to return (default: 10)",
+                    "default": 10
+                }
+            },
+            "required": ["customer_id"]
+        }
+    },
+    "get_customer_by_identifier": {
+        "name": "get_customer_by_identifier",
+        "description": "Get customer information by various identifiers (email, customer ID, or friendly name like 'customer123')",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "identifier": {
+                    "type": "string",
+                    "description": "Customer identifier - can be email, UUID, friendly name (e.g., 'customer123'), or customer name"
+                }
+            },
+            "required": ["identifier"]
+        }
+    },
     "get_customer_info": {
         "name": "get_customer_info",
         "description": "Get customer information by email address",
@@ -199,6 +232,23 @@ async def call_tool(request: ToolRequest):
                 raise HTTPException(status_code=400, detail="customer_email is required")
             
             result = await db_tools.get_customer_orders(customer_email, limit)
+            return {"success": True, "result": result}
+        
+        elif tool_name == "get_customer_orders_by_id":
+            customer_id = parameters.get("customer_id")
+            limit = parameters.get("limit", 10)
+            if not customer_id:
+                raise HTTPException(status_code=400, detail="customer_id is required")
+            
+            result = await db_tools.get_customer_orders_by_id(customer_id, limit)
+            return {"success": True, "result": result}
+        
+        elif tool_name == "get_customer_by_identifier":
+            identifier = parameters.get("identifier")
+            if not identifier:
+                raise HTTPException(status_code=400, detail="identifier is required")
+            
+            result = await db_tools.get_customer_by_identifier(identifier)
             return {"success": True, "result": result}
         
         elif tool_name == "get_customer_info":

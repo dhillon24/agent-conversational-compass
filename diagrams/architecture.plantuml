@@ -1,0 +1,166 @@
+@startuml Agent Conversational Compass Architecture
+
+!theme cerulean-outline
+title Agent Conversational Compass - Production Architecture
+
+' Define actors and external systems
+actor "Customer" as customer #lightblue
+actor "CS Agent" as agent #lightgreen
+actor "Admin" as admin #orange
+
+' Frontend Layer
+package "Frontend Layer" #e3f2fd {
+    component "React Frontend" as frontend {
+        [TypeScript + Tailwind] as ui
+        [Chat Interface] as chat
+        [Dashboard] as dashboard
+        [Port: 5173] as fe_port
+    }
+}
+
+' API Gateway Layer
+package "API Gateway" #f3e5f5 {
+    component "FastAPI Backend" as backend {
+        [Python 3.12] as python
+        [Async Support] as async
+        [REST API] as api
+        [Port: 8000] as be_port
+    }
+    component "Security Middleware" as security {
+        [Authorization] as auth
+        [Session Mgmt] as session
+        [CORS] as cors
+    }
+}
+
+' AI Processing Layer
+package "AI Processing Layer" #e8f5e8 {
+    component "LangGraph Agent" as langgraph {
+        [Workflow Orchestration] as workflow
+        [Node Processing] as nodes
+    }
+    
+    package "AI Nodes" {
+        component "Action Node" as action_node {
+            [Query Classification] as classify
+            [Security Checks] as sec_check
+            [Pattern Matching] as pattern
+        }
+        component "Policy Node" as policy_node {
+            [Response Generation] as response
+            [Context Integration] as context
+        }
+        component "Sentiment Node" as sentiment_node {
+            [RoBERTa Analysis] as roberta
+            [Emotion Detection] as emotion
+        }
+    }
+    
+    component "OpenAI GPT-4o-mini" as openai {
+        [Intelligent Responses] as gpt
+        [Function Calling] as functions
+        [Context Awareness] as ai_context
+    }
+}
+
+' Data Processing Layer
+package "Data Processing Layer" #fff3e0 {
+    component "MCP Server" as mcp {
+        [Model Context Protocol] as protocol
+        [Database Tools] as tools
+        [Port: 8001] as mcp_port
+    }
+    
+    package "MCP Tools" {
+        component "Customer Lookup" as customer_lookup {
+            [get_customer_by_identifier] as get_customer
+        }
+        component "Order History" as order_history {
+            [get_customer_orders_by_id] as get_orders
+        }
+        component "Order Details" as order_details {
+            [get_order_details] as get_order
+        }
+    }
+}
+
+' Data Storage Layer
+package "Data Storage Layer" #fff8e1 {
+    database "PostgreSQL" as postgres {
+        [Business Database] as business_db
+        [Port: 5432] as pg_port
+    }
+    
+    database "Qdrant" as qdrant {
+        [Vector Memory] as vector_db
+        [Port: 6333] as qd_port
+    }
+}
+
+' Background Services
+package "Background Services" #f1f8e9 {
+    component "Worker Service" as worker {
+        [Async Tasks] as tasks
+        [Background Jobs] as jobs
+        [Port: 8002] as worker_port
+    }
+}
+
+' Security & Authorization Layer
+package "Security & Authorization" #ffebee {
+    component "Authorization Engine" as auth_engine {
+        [Role-Based Access] as rbac
+        [Data Protection] as protection
+        [Audit Logging] as audit
+    }
+}
+
+' User interactions
+customer --> frontend : "Web Interface"
+agent --> frontend : "Agent Dashboard"
+admin --> frontend : "Admin Panel"
+
+' Frontend to Backend
+frontend --> backend : "REST API\n(HTTP/JSON)"
+
+' Backend processing flow
+backend --> security
+security --> langgraph
+
+' AI processing flow
+langgraph --> action_node
+langgraph --> policy_node
+langgraph --> sentiment_node
+
+action_node --> auth_engine : "Security Check"
+policy_node --> openai : "Generate Response"
+
+' Data access flow
+action_node --> mcp : "Database Query"
+policy_node --> mcp : "Context Data"
+
+mcp --> customer_lookup
+mcp --> order_history
+mcp --> order_details
+
+customer_lookup --> postgres
+order_history --> postgres
+order_details --> postgres
+
+' Memory management
+backend --> qdrant : "Store/Retrieve\nConversations"
+policy_node --> qdrant : "Memory Context"
+
+' Background processing
+backend --> worker : "Async Tasks"
+
+' Notes and annotations
+note top of openai : "GPT-4o-mini with\nfunction calling and\ncontext awareness"
+
+note right of postgres : "Complete e-commerce\ndatabase with customers,\norders, products, and\nshipping information"
+
+note left of qdrant : "Vector database for\nconversation memory,\nsemantic search, and\ncross-session history"
+
+note bottom of auth_engine : "Role-based security:\n- Customers: own data only\n- Agents: all customer data\n- Admins: full system access"
+
+@enduml 

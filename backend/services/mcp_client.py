@@ -166,6 +166,34 @@ class MCPClient:
         except Exception as e:
             logger.error(f"MCP health check failed: {e}")
             return "unhealthy"
+    
+    async def get_customer_orders_by_id(self, customer_id: str, limit: int = 10) -> Dict[str, Any]:
+        """
+        Get recent orders for a customer by customer ID.
+        
+        Args:
+            customer_id: Customer's UUID identifier
+            limit: Maximum number of orders to return
+            
+        Returns:
+            Customer orders or error information
+        """
+        return await self.call_tool("get_customer_orders_by_id", {
+            "customer_id": customer_id,
+            "limit": limit
+        })
+    
+    async def get_customer_by_identifier(self, identifier: str) -> Dict[str, Any]:
+        """
+        Get customer information by various identifiers.
+        
+        Args:
+            identifier: Customer identifier (email, UUID, friendly name like 'customer123', or customer name)
+            
+        Returns:
+            Customer information or error information
+        """
+        return await self.call_tool("get_customer_by_identifier", {"identifier": identifier})
 
 
 # Global MCP client instance

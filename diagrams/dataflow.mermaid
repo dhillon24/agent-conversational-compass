@@ -1,0 +1,97 @@
+sequenceDiagram
+    participant U as 👤 User
+    participant FE as ⚛️ Frontend
+    participant BE as 🚀 Backend
+    participant MW as 🔒 Middleware
+    participant LG as 🤖 LangGraph
+    participant AN as 📝 Action Node
+    participant AUTH as 🔐 Auth Engine
+    participant MCP as 🔧 MCP Server
+    participant PG as 🐘 PostgreSQL
+    participant PN as 💬 Policy Node
+    participant OAI as 🧠 OpenAI
+    participant QD as 🔍 Qdrant
+    participant SN as 😊 Sentiment
+    
+    Note over U,SN: Customer Service Conversation Flow
+    
+    %% User sends message
+    U->>FE: Send message: "Show me order history for customer123"
+    FE->>BE: POST /chat {user, message, session_id}
+    
+    %% Security and session management
+    BE->>MW: Process request
+    MW->>QD: Check session history
+    QD-->>MW: Return session context
+    MW->>LG: Route to LangGraph agent
+    
+    %% AI Processing begins
+    LG->>SN: Analyze sentiment
+    SN-->>LG: Sentiment: 0.8 (positive)
+    
+    LG->>AN: Classify action type
+    AN->>AN: Regex pattern matching<br/>"order history for customer123"
+    AN->>AUTH: Security authorization check
+    
+    %% Security check
+    Note over AUTH: Role-based access control
+    AUTH->>AUTH: Check if user authorized<br/>for customer123 data
+    
+    alt User is Customer Service Agent
+        AUTH-->>AN: ✅ AUTHORIZED (agent can access any customer)
+        AN->>MCP: get_customer_by_identifier("customer123")
+        MCP->>PG: SELECT * FROM customers WHERE friendly_name='customer123'
+        PG-->>MCP: Customer data: Test User (test_user@email.com)
+        MCP-->>AN: Customer found: UUID abc123
+        
+        AN->>MCP: get_customer_orders_by_id(customer_uuid)
+        MCP->>PG: SELECT orders.*, products.name, shipments.status<br/>FROM orders JOIN order_items...
+        PG-->>MCP: Order #123: Wireless Headphones + Case, $258.37, Shipped
+        MCP-->>AN: Complete order history
+        
+    else User is customer123
+        AUTH-->>AN: ✅ AUTHORIZED (own data access)
+        Note over AN,MCP: Same database queries as above
+        
+    else User is different customer
+        AUTH-->>AN: ❌ UNAUTHORIZED ACCESS BLOCKED
+        AN->>AN: Log security violation
+        AN-->>PN: Security error response
+        
+    end
+    
+    %% Response generation (authorized path)
+    AN->>PN: Action result + order data
+    PN->>QD: Retrieve conversation memory
+    QD-->>PN: Session history + user context
+    
+    PN->>OAI: Generate response with context:<br/>- Order data: Order #123<br/>- Customer: Test User<br/>- Conversation history
+    
+    Note over OAI: GPT-4o-mini processes with full context
+    OAI-->>PN: "Test User has Order #123: Wireless Headphones<br/>and Smartphone Case for $258.37, shipped via FedEx..."
+    
+    %% Memory storage and response
+    PN->>QD: Store conversation turn
+    QD->>QD: Update session memory<br/>Update user history<br/>Create embeddings
+    
+    PN-->>LG: Complete response
+    LG-->>MW: Response with sentiment metadata
+    MW->>QD: Final conversation storage
+    MW-->>BE: Formatted response
+    BE-->>FE: JSON response
+    FE-->>U: Display order history
+    
+    %% Background processing
+    Note over QD: Background: Vector indexing, semantic search preparation
+    
+    rect rgb(255, 245, 245)
+        Note over AUTH,PG: Security Layer: All database access is authorized<br/>Customers can only access own data<br/>Agents can access any customer data
+    end
+    
+    rect rgb(245, 255, 245)
+        Note over QD,SN: Memory Layer: Session tracking, cross-session history<br/>Semantic search, conversation continuity
+    end
+    
+    rect rgb(245, 245, 255)
+        Note over OAI,PN: AI Layer: Context-aware responses using real data<br/>No hallucination, intelligent conversation flow
+    end 
